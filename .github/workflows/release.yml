@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'latest'
+  release:
+    types: [created]
+
+concurrency:
+  group: release-${{ github.ref_name }}
+
+jobs:
+  get-release:
+    runs-on: ubuntu-slim
+    continue-on-error: true
+    outputs:
+      should_create: ${{ steps.get-release.outcome == 'failure' }}
+      should_upload: ${{ steps.find-asset.outcome == 'failure' }}
+      should_quit: ${{ steps.get-release.outcome == 'success' && steps.find-asset.outcome == 'success'}}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Get release
+        id: get-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view ${{ github.ref_name }} --json assets >${{ runner.temp }}/release
+      - name: Find Binary Asset
+        id: find-asset
+        run: |
+          cat ${{ runner.temp }}/release | jq .assets
+          cat ${{ runner.temp }}/release |
+            jq '.assets // [] | any(.name == "xcursor-viewer") or halt_error' 2>/dev/null
+  build:
+    if: ${{ ! cancelled() && needs.get-release.outputs.should_quit != 'true' }}
+    needs: get-release
+    runs-on: ubuntu-slim
+    env:
+      should_create: ${{ fromJSON(needs.get-release.outputs.should_create) }}
+      should_upload: ${{ fromJSON(needs.get-release.outputs.should_upload) }}
+    permissions:
+      packages: write
+      contents: write
+    steps:
+      - name: Install Build Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential make cmake qtbase5-dev qtchooser qtbase5-dev-tools
+      - uses: actions/checkout@v5
+      - name: Build
+        run: |
+          cmake . -B build && make -C build
+      - name: Create Release
+        if: ${{ env.should_create == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create -t "${{ github.ref_name }}" --generate-notes -- ${{ github.ref_name }} build/xcursor-viewer#xcursor-viewer_${{ github.ref_name }}
+      - name: Upload Binary and Publish Release
+        if: ${{ env.should_upload == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload --clobber ${{ github.ref_name }} build/xcursor-viewer#xcursor-viewer_${{ github.ref_name }} &&
+          gh release edit ${{ github.ref_name }} --draft=false
