@@ -12,9 +12,9 @@ SPDX-License-Identifier: CC0-1.0
 1. Install dependencies (using `apt` for example)
 
     ```bash
-    apt install -y ninja-build cmake qt5-default
+    apt install -y ninja-build cmake g++ qt5-default
     # if qt5-default is not available, use the following command instead:
-    apt install -y ninja-build cmake qtbase5-dev qtchooser qtbase5-dev-tools
+    apt install -y ninja-build cmake g++ qtbase5-dev
     ```
 
 1. Clone repository and compile
@@ -40,20 +40,16 @@ Base images: `busybox:latest`, `debian:bookworm`
 
     ```Dockerfile
     # syntax=docker/dockerfile:1.19
-    FROM busybox:latest AS source
-    ARG SOURCE_REF
-    ADD https://github.com/drizt/xcursor-viewer/archive/refs/${SOURCE_REF:-heads/master}.zip /xcursor-viewer.zip
-    RUN unzip xcursor-viewer.zip
-
     FROM debian:bookworm AS build
+    ARG tag=heads/master
     RUN <<EOF
       apt update
-      apt install -y ninja-build cmake \
-        qtbase5-dev qtchooser qtbase5-dev-tools
+      apt install -y ninja-build cmake g++ qtbase5-dev
       apt clean
     EOF
-    RUN --mount=from=source,src=/xcursor-viewer-master,dst=/xcursor-viewer,readwrite <<EOF
-      cmake -G Ninja /xcursor-viewer -B /out && cmake --build /out
+    ADD --link --unpack=true https://github.com/drizt/xcursor-viewer/archive/refs/${tag}.tar.gz /xcursor-viewer
+    RUN <<EOF
+      cmake -G Ninja /xcursor-viewer/xcursor-viewer-${tag#*/} -B /out && cmake --build /out
     EOF
 
     FROM scratch
