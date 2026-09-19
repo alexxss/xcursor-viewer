@@ -5,7 +5,13 @@ SPDX-License-Identifier: CC0-1.0
 
 # xcursor-viewer
 
+![Release](../../actions/workflows/release.yml/badge.svg)
+
 ## Usage
+
+### Download
+
+The easiest method. Simply download and execute the compiled binary from [Releases](../../releases).
 
 ### Compile (without Docker)
 
